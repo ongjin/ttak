@@ -9,9 +9,9 @@ enum KeyCode: UInt16 {
 }
 
 enum TtakConstants {
-    static let version = "1.0.0"
+    static let version = "2.0.0"
     static let configDefaultPath = "~/.config/ttak/config.json"
-    static let bundleIdentifier = "com.ttak.agent"
+    static let bundleIdentifier = "com.ongjin.ttak"
 
     static let defaultInputSource1 = "com.apple.keylayout.ABC"
     static let defaultInputSource2 = "com.apple.inputmethod.Korean.2SetKorean"

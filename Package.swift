@@ -12,7 +12,8 @@ let package = Package(
             path: "Sources/Ttak",
             linkerSettings: [
                 .linkedFramework("Carbon"),
-                .linkedFramework("ApplicationServices")
+                .linkedFramework("ApplicationServices"),
+                .linkedFramework("Cocoa")
             ]
         )
     ]

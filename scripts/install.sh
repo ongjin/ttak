@@ -1,24 +1,21 @@
 #!/bin/bash
 set -euo pipefail
 
-INSTALL_DIR="/usr/local/bin"
-PLIST_DIR="$HOME/Library/LaunchAgents"
-PLIST_NAME="com.ttak.agent.plist"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 
-echo "Building ttak..."
-swift build -c release
+cd "$PROJECT_DIR"
 
-echo "Installing binary to $INSTALL_DIR..."
-sudo cp .build/release/ttak "$INSTALL_DIR/ttak"
-sudo chmod +x "$INSTALL_DIR/ttak"
+# Build the .app bundle
+./scripts/build-app.sh
 
-echo "Installing LaunchAgent..."
-mkdir -p "$PLIST_DIR"
-sed "s|HOMEBREW_PREFIX|/usr/local|g" resources/com.ttak.agent.plist > "$PLIST_DIR/$PLIST_NAME"
-
-echo "Loading LaunchAgent..."
-launchctl load "$PLIST_DIR/$PLIST_NAME"
+# Install to /Applications
+echo "Installing Ttak.app to /Applications..."
+rm -rf /Applications/Ttak.app
+cp -R .build/Ttak.app /Applications/
 
 echo ""
-echo "ttak installed successfully."
+echo "Ttak installed successfully."
+echo "Run: open /Applications/Ttak.app"
+echo ""
 echo "IMPORTANT: Grant Accessibility permission in System Settings."

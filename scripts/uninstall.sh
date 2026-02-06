@@ -1,19 +1,14 @@
 #!/bin/bash
 set -euo pipefail
 
-PLIST_DIR="$HOME/Library/LaunchAgents"
-PLIST_NAME="com.ttak.agent.plist"
+echo "Quitting Ttak..."
+osascript -e 'quit app "Ttak"' 2>/dev/null || true
+sleep 1
 
-echo "Stopping ttak..."
-launchctl unload "$PLIST_DIR/$PLIST_NAME" 2>/dev/null || true
-
-echo "Removing LaunchAgent..."
-rm -f "$PLIST_DIR/$PLIST_NAME"
-
-echo "Removing binary..."
-sudo rm -f /usr/local/bin/ttak
+echo "Removing Ttak.app..."
+rm -rf /Applications/Ttak.app
 
 echo "Removing config..."
 rm -rf ~/.config/ttak
 
-echo "ttak uninstalled."
+echo "Ttak uninstalled."

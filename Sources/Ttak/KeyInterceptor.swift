@@ -25,7 +25,7 @@ final class KeyInterceptor {
 
     private init() {}
 
-    func setup(config: Config, inputSourceManager: InputSourceManager) {
+    func setup(config: Config, inputSourceManager: InputSourceManager) -> Bool {
         self.inputSourceManager = inputSourceManager
         self.triggerKeyCode = config.triggerKeyCode.rawValue
         self.isCapsLockMode = (config.triggerKey == "capsLock")
@@ -51,7 +51,7 @@ final class KeyInterceptor {
             userInfo: Unmanaged.passUnretained(self).toOpaque()
         ) else {
             fputs("ERROR: Could not create event tap. Is Accessibility permission granted?\n", stderr)
-            exit(1)
+            return false
         }
 
         self.eventTap = tap
@@ -59,7 +59,7 @@ final class KeyInterceptor {
 
         guard let source = self.runLoopSource else {
             fputs("ERROR: Could not create run loop source\n", stderr)
-            exit(1)
+            return false
         }
 
         CFRunLoopAddSource(CFRunLoopGetCurrent(), source, .commonModes)
@@ -68,6 +68,7 @@ final class KeyInterceptor {
         if verbose {
             fputs("Event tap installed. Trigger key: \(config.triggerKey) (keycode \(triggerKeyCode))\n", stderr)
         }
+        return true
     }
 
     func teardown() {

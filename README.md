@@ -1,6 +1,6 @@
 # Ttak (딱)
 
-A lightweight macOS daemon that eliminates the input source switching delay. Switch between Korean and English instantly.
+A lightweight macOS menu bar app that eliminates the input source switching delay. Switch between Korean and English instantly.
 
 ## Problem
 
@@ -8,32 +8,24 @@ macOS introduces a ~0.2-0.3 second delay when using Caps Lock to toggle input so
 
 ## How Ttak Solves It
 
-Ttak installs a low-level event tap (`CGEventTap`) to intercept key events before the OS processes them. When it detects a tap of the trigger key, it immediately switches the input source via the Carbon `TISSelectInputSource` API — bypassing the OS delay entirely.
-
-If the Carbon API fails (a known macOS bug with CJKV input sources), Ttak automatically falls back to simulating the system shortcut key (Fn+Space).
+Ttak installs a low-level event tap (`CGEventTap`) to intercept key events before the OS processes them. When it detects a tap of the trigger key, it immediately switches the input source — bypassing the OS delay entirely.
 
 ## Features
 
 - **Zero delay** — Input source switches instantly on key tap
+- **Menu bar app** — Lives in the menu bar, no Dock icon
 - **Lightweight** — Under 5MB memory, 0% idle CPU, ~100KB binary
 - **Zero config** — Works immediately with Right Command as the trigger key
 - **CJKV-safe** — Detects `TISSelectInputSource` failures and auto-falls back to shortcut simulation
 - **Caps Lock support** — Use Caps Lock as the trigger key (LED toggle suppressed)
-- **Homebrew ready** — Install and manage via `brew services`
 
 ## Installation
 
-### Homebrew
+### Homebrew Cask (Recommended)
 
 ```bash
 brew tap ongjin/ttak
-brew install ttak
-```
-
-Start the service (runs at login automatically):
-
-```bash
-brew services start ttak
+brew install --cask ttak
 ```
 
 ### Build from Source
@@ -41,11 +33,11 @@ brew services start ttak
 ```bash
 git clone https://github.com/ongjin/ttak.git
 cd ttak
-swift build -c release
-sudo cp .build/release/ttak /usr/local/bin/
+./scripts/build-app.sh
+open .build/Ttak.app
 ```
 
-Or use the install script:
+Or install to /Applications:
 
 ```bash
 ./scripts/install.sh
@@ -53,32 +45,22 @@ Or use the install script:
 
 ## First Run: Grant Accessibility Permission
 
-Ttak needs Accessibility permission to intercept keyboard events. On first launch, macOS will prompt you to grant access.
+On first launch, Ttak will ask for Accessibility permission.
 
-1. Open **System Settings**
-2. Go to **Privacy & Security > Accessibility**
-3. Find `ttak` in the list and **enable** it
-4. Restart ttak (`brew services restart ttak` or kill and relaunch)
+1. Click **"Open System Settings"** in the alert dialog
+2. Find **Ttak** in the Accessibility list and **enable** it
+3. Ttak will activate automatically — no restart needed
 
-> Without this permission, Ttak cannot create the event tap and will exit with an error.
+> Without this permission, Ttak cannot intercept keyboard events.
 
-## Usage
+## Menu Bar
 
-```bash
-# Run directly (foreground)
-ttak
+After launching, a keyboard icon (⌨) appears in the menu bar. Click it to see:
 
-# Run with debug logging
-ttak --verbose
-
-# Use a custom config file
-ttak --config ~/my-config.json
-
-# Print version
-ttak --version
-```
-
-For production use, run via `brew services` or as a LaunchAgent.
+- **Status** — Active, Waiting for Permission, or Error
+- **Input sources** — The two sources being toggled (e.g., English ↔ Korean)
+- **Trigger key** — Which key triggers the toggle
+- **Quit** — Stop Ttak
 
 ## Configuration
 
@@ -92,8 +74,7 @@ Config file: `~/.config/ttak/config.json` (optional — Ttak works without it)
     "com.apple.inputmethod.Korean.2SetKorean"
   ],
   "holdThreshold": 300,
-  "debounceInterval": 100,
-  "verbose": false
+  "debounceInterval": 100
 }
 ```
 
@@ -105,7 +86,6 @@ Config file: `~/.config/ttak/config.json` (optional — Ttak works without it)
 | `inputSources` | ABC / Korean 2-Set | Two input source IDs to toggle between |
 | `holdThreshold` | `300` (ms) | Max press duration to register as a tap |
 | `debounceInterval` | `100` (ms) | Min interval between consecutive toggles |
-| `verbose` | `false` | Log debug info to stderr |
 
 ### Finding Your Input Source IDs
 
@@ -124,16 +104,15 @@ Key Press → CGEventTap (session level)
 ```
 
 1. A `CGEventTap` monitors `flagsChanged` and `keyDown` events
-2. The state machine tracks whether the trigger key was tapped cleanly (no other key pressed, within hold threshold)
-3. On a clean tap, `TISSelectInputSource` is called to switch the input source
-4. If verification fails 3 consecutive times (CJKV bug), Ttak permanently switches to simulating Fn+Space
+2. The state machine detects clean taps (no other key pressed, within hold threshold)
+3. On a clean tap, `TISSelectInputSource` switches the input source
+4. If verification fails 3 consecutive times (CJKV bug), falls back to simulating Fn+Space
 
 ## Uninstall
 
 ```bash
 # Homebrew
-brew services stop ttak
-brew uninstall ttak
+brew uninstall --cask ttak
 
 # Manual
 ./scripts/uninstall.sh
@@ -147,8 +126,8 @@ brew uninstall ttak
 ## Tech Stack
 
 - **Language**: Swift 5.9
-- **Frameworks**: CoreGraphics, Carbon, ApplicationServices
-- **Build**: Swift Package Manager
+- **Frameworks**: AppKit, CoreGraphics, Carbon
+- **Build**: Swift Package Manager + build script
 
 ## Known Limitations
 
