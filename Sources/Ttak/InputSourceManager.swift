@@ -12,9 +12,6 @@ final class InputSourceManager {
     private let source2ID: String
     private var source1: TISInputSource?
     private var source2: TISInputSource?
-    private var useFallback = false
-    private var consecutiveFailures = 0
-    private let maxConsecutiveFailures = 3
     private let verbose: Bool
 
     init(config: Config) {
@@ -84,14 +81,6 @@ final class InputSourceManager {
             targetID = source1ID
         }
 
-        if useFallback {
-            if verbose {
-                fputs("Toggle (fallback): \(currentID) -> \(targetID)\n", stderr)
-            }
-            simulateInputSourceToggle()
-            return
-        }
-
         guard let target = targetSource else {
             if verbose {
                 fputs("Target source not available, using fallback\n", stderr)
@@ -100,34 +89,17 @@ final class InputSourceManager {
             return
         }
 
-        let success = selectInputSource(target, expectedID: targetID)
-        if success {
-            consecutiveFailures = 0
+        let status = TISSelectInputSource(target)
+        if status == noErr {
             if verbose {
                 fputs("Toggle (TIS): \(currentID) -> \(targetID)\n", stderr)
             }
         } else {
-            consecutiveFailures += 1
             if verbose {
-                fputs("TIS verification failed (\(consecutiveFailures)/\(maxConsecutiveFailures))\n", stderr)
-            }
-            if consecutiveFailures >= maxConsecutiveFailures {
-                useFallback = true
-                consecutiveFailures = 0
-                fputs("TISSelectInputSource failed \(maxConsecutiveFailures) times, switching to shortcut fallback\n", stderr)
+                fputs("TISSelectInputSource failed (status \(status)), using fallback\n", stderr)
             }
             simulateInputSourceToggle()
         }
-    }
-
-    private func selectInputSource(_ source: TISInputSource, expectedID: String) -> Bool {
-        let status = TISSelectInputSource(source)
-        guard status == noErr else { return false }
-
-        // Verify immediately without blocking
-        // If the switch hasn't propagated yet, it may return false
-        // In that case, fallback will activate on next toggle
-        return currentInputSourceID() == expectedID
     }
 
     private func simulateInputSourceToggle() {

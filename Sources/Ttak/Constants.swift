@@ -9,7 +9,7 @@ enum KeyCode: UInt16 {
 }
 
 enum TtakConstants {
-    static let version = "2.0.0"
+    static let version = "2.1.0"
     static let configDefaultPath = "~/.config/ttak/config.json"
     static let bundleIdentifier = "com.ongjin.ttak"
 
@@ -17,5 +17,5 @@ enum TtakConstants {
     static let defaultInputSource2 = "com.apple.inputmethod.Korean.2SetKorean"
 
     static let defaultHoldThreshold: Int = 300      // ms
-    static let defaultDebounceInterval: Int = 100   // ms
+    static let defaultDebounceInterval: Int = 30    // ms
 }

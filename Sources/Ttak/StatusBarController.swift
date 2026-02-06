@@ -1,4 +1,5 @@
 import AppKit
+import ServiceManagement
 
 enum AppStatus {
     case active
@@ -8,8 +9,9 @@ enum AppStatus {
 
 class StatusBarController: NSObject {
     private var statusItem: NSStatusItem
-    private let config: Config
+    var config: Config
     private var statusMenuItem: NSMenuItem!
+    var onOpenPreferences: (() -> Void)?
 
     init(config: Config) {
         self.config = config
@@ -20,6 +22,11 @@ class StatusBarController: NSObject {
             button.image = NSImage(systemSymbolName: "keyboard", accessibilityDescription: "Ttak")
         }
 
+        setupMenu()
+    }
+
+    func reloadMenu(config: Config) {
+        self.config = config
         setupMenu()
     }
 
@@ -54,6 +61,19 @@ class StatusBarController: NSObject {
 
         menu.addItem(NSMenuItem.separator())
 
+        // Preferences
+        let prefsItem = NSMenuItem(title: "Preferences...", action: #selector(openPreferences), keyEquivalent: ",")
+        prefsItem.target = self
+        menu.addItem(prefsItem)
+
+        // Launch at Login
+        let loginItem = NSMenuItem(title: "Launch at Login", action: #selector(toggleLaunchAtLogin(_:)), keyEquivalent: "")
+        loginItem.target = self
+        loginItem.state = isLaunchAtLoginEnabled() ? .on : .off
+        menu.addItem(loginItem)
+
+        menu.addItem(NSMenuItem.separator())
+
         // Quit
         let quitItem = NSMenuItem(title: "Quit Ttak", action: #selector(quitApp), keyEquivalent: "q")
         quitItem.target = self
@@ -73,13 +93,35 @@ class StatusBarController: NSObject {
         }
     }
 
+    @objc private func openPreferences() {
+        onOpenPreferences?()
+    }
+
+    @objc private func toggleLaunchAtLogin(_ sender: NSMenuItem) {
+        let service = SMAppService.mainApp
+        do {
+            if service.status == .enabled {
+                try service.unregister()
+                sender.state = .off
+            } else {
+                try service.register()
+                sender.state = .on
+            }
+        } catch {
+            fputs("WARNING: Launch at Login toggle failed: \(error)\n", stderr)
+        }
+    }
+
+    private func isLaunchAtLoginEnabled() -> Bool {
+        return SMAppService.mainApp.status == .enabled
+    }
+
     @objc private func quitApp() {
         NSApplication.shared.terminate(nil)
     }
 
     private func shortName(_ sourceID: String) -> String {
         let last = sourceID.components(separatedBy: ".").last ?? sourceID
-        // Make common names more readable
         switch last {
         case "2SetKorean": return "Korean"
         case "ABC": return "English"

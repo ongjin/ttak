@@ -20,9 +20,22 @@ struct Config: Codable {
 
     var triggerKeyCode: KeyCode {
         switch triggerKey {
+        case "leftCommand": return .leftCommand
         case "capsLock": return .capsLock
+        case "leftOption": return .leftOption
         case "rightOption": return .rightOption
         default: return .rightCommand
+        }
+    }
+
+    func save(to path: String) {
+        let expandedPath = NSString(string: path).expandingTildeInPath
+        let dir = (expandedPath as NSString).deletingLastPathComponent
+        try? FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = .prettyPrinted
+        if let data = try? encoder.encode(self) {
+            FileManager.default.createFile(atPath: expandedPath, contents: data)
         }
     }
 
