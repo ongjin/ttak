@@ -23,6 +23,12 @@ cask "ttak" do
 
   app "Ttak.app"
 
+  postflight do
+    system_command "/usr/bin/xattr",
+                   args: ["-d", "com.apple.quarantine", "#{appdir}/Ttak.app"],
+                   sudo: false
+  end
+
   zap trash: [
     "~/.config/ttak",
   ]
