@@ -91,11 +91,13 @@ final class KeyInterceptor {
     fileprivate func handleEvent(proxy: CGEventTapProxy, type: CGEventType, event: CGEvent) -> Unmanaged<CGEvent>? {
         let keycode = UInt16(event.getIntegerValueField(.keyboardEventKeycode))
 
-        // Handle tap disabled — re-enable
+        // Handle tap disabled — re-enable and reset state
         if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
             if let tap = eventTap {
                 CGEvent.tapEnable(tap: tap, enable: true)
             }
+            triggerIsDown = false
+            otherKeyPressed = false
             return Unmanaged.passUnretained(event)
         }
 
@@ -156,7 +158,9 @@ final class KeyInterceptor {
                         && (now - lastToggleTime) > debounceIntervalTicks
                     {
                         lastToggleTime = now
-                        inputSourceManager?.toggle()
+                        DispatchQueue.main.async { [self] in
+                            inputSourceManager?.toggle()
+                        }
                     }
                     if isCapsLockMode { return nil }
                 }
@@ -194,7 +198,9 @@ final class KeyInterceptor {
                     // No otherKeyPressed or holdThreshold check needed
                     if (now - lastToggleTime) > debounceIntervalTicks {
                         lastToggleTime = now
-                        inputSourceManager?.toggle()
+                        DispatchQueue.main.async { [self] in
+                            inputSourceManager?.toggle()
+                        }
                     }
                 }
                 return nil // suppress the trigger key

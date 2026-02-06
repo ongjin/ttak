@@ -9,7 +9,7 @@ enum KeyCode: UInt16 {
 }
 
 enum TtakConstants {
-    static let version = "2.2.0"
+    static let version = "2.2.1"
     static let configDefaultPath = "~/.config/ttak/config.json"
     static let bundleIdentifier = "com.ongjin.ttak"
 
