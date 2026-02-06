@@ -2,7 +2,7 @@ class Ttak < Formula
   desc "Zero-delay Korean/English input source switcher for macOS"
   homepage "https://github.com/ongjin/ttak"
   url "https://github.com/ongjin/ttak/archive/refs/tags/v1.0.0.tar.gz"
-  sha256 "REPLACE_WITH_SHA256"
+  sha256 "39048b1d1d59a97092c77c64b7044d061a4f30440886d56f4551e3d5db132060"
   license "MIT"
 
   depends_on :macos => :ventura
