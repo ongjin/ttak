@@ -2,7 +2,7 @@ import AppKit
 import Carbon
 
 final class PreferencesWindowController: NSWindowController {
-    private var triggerKeyPopUp: NSPopUpButton!
+    private var hotkeyButton: NSButton!
     private var source1PopUp: NSPopUpButton!
     private var source2PopUp: NSPopUpButton!
     private var holdSlider: NSSlider!
@@ -12,12 +12,15 @@ final class PreferencesWindowController: NSWindowController {
 
     private var availableSources: [InputSourceInfo] = []
     private var config: Config
+    private var recordedKeyCode: UInt16?
+    private var isRecording = false
 
     init(config: Config) {
         self.config = config
+        self.recordedKeyCode = config.triggerKeyRawCode ?? config.resolvedKeyCode
 
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 420, height: 320),
+            contentRect: NSRect(x: 0, y: 0, width: 420, height: 300),
             styleMask: [.titled, .closable],
             backing: .buffered,
             defer: false
@@ -40,7 +43,12 @@ final class PreferencesWindowController: NSWindowController {
 
     func updateConfig(_ config: Config) {
         self.config = config
+        self.recordedKeyCode = config.triggerKeyRawCode ?? config.resolvedKeyCode
         loadCurrentValues()
+    }
+
+    deinit {
+        stopRecording()
     }
 
     // MARK: - Input Source Discovery
@@ -81,12 +89,11 @@ final class PreferencesWindowController: NSWindowController {
         guard let contentView = window?.contentView else { return }
         contentView.wantsLayer = true
 
-        // Trigger key
+        // Trigger key — hotkey recorder
         let triggerLabel = makeLabel("Trigger Key:")
-        triggerKeyPopUp = NSPopUpButton(frame: .zero, pullsDown: false)
-        triggerKeyPopUp.addItems(withTitles: [
-            "Right Command", "Left Command", "Caps Lock", "Right Option", "Left Option"
-        ])
+        hotkeyButton = NSButton(title: "Click to record...", target: self, action: #selector(startRecording))
+        hotkeyButton.bezelStyle = .rounded
+        hotkeyButton.setContentHuggingPriority(.defaultLow, for: .horizontal)
 
         // Input source 1
         let src1Label = makeLabel("Input Source 1:")
@@ -112,7 +119,7 @@ final class PreferencesWindowController: NSWindowController {
 
         // Grid layout
         let grid = NSGridView(views: [
-            [triggerLabel, triggerKeyPopUp],
+            [triggerLabel, hotkeyButton],
             [src1Label, source1PopUp],
             [src2Label, source2PopUp],
             [holdTitleLabel, holdSlider, holdLabel],
@@ -167,19 +174,34 @@ final class PreferencesWindowController: NSWindowController {
         return label
     }
 
+    // MARK: - Hotkey Recording (via CGEvent tap in KeyInterceptor)
+
+    @objc private func startRecording() {
+        isRecording = true
+        hotkeyButton.title = "Press a modifier key..."
+
+        KeyInterceptor.shared.isRecording = true
+        KeyInterceptor.shared.onKeyRecorded = { [weak self] keycode in
+            guard let self = self, self.isRecording else { return }
+            self.isRecording = false
+            self.recordedKeyCode = keycode
+            self.hotkeyButton.title = Config.keyName(forKeyCode: keycode)
+        }
+    }
+
+    private func stopRecording() {
+        isRecording = false
+        KeyInterceptor.shared.isRecording = false
+        KeyInterceptor.shared.onKeyRecorded = nil
+    }
+
     // MARK: - Load / Save
 
     private func loadCurrentValues() {
         // Trigger key
-        let triggerIndex: Int
-        switch config.triggerKey {
-        case "leftCommand": triggerIndex = 1
-        case "capsLock": triggerIndex = 2
-        case "rightOption": triggerIndex = 3
-        case "leftOption": triggerIndex = 4
-        default: triggerIndex = 0 // rightCommand
+        if let code = recordedKeyCode {
+            hotkeyButton.title = Config.keyName(forKeyCode: code)
         }
-        triggerKeyPopUp.selectItem(at: triggerIndex)
 
         // Input sources
         selectSourcePopUp(source1PopUp, withID: config.inputSources.count > 0 ? config.inputSources[0] : "")
@@ -201,16 +223,6 @@ final class PreferencesWindowController: NSWindowController {
         }
     }
 
-    private func triggerKeyName(at index: Int) -> String {
-        switch index {
-        case 1: return "leftCommand"
-        case 2: return "capsLock"
-        case 3: return "rightOption"
-        case 4: return "leftOption"
-        default: return "rightCommand"
-        }
-    }
-
     // MARK: - Actions
 
     @objc private func holdSliderChanged() {
@@ -224,8 +236,21 @@ final class PreferencesWindowController: NSWindowController {
     }
 
     @objc private func savePressed() {
+        stopRecording()
+
         var newConfig = Config()
-        newConfig.triggerKey = triggerKeyName(at: triggerKeyPopUp.indexOfSelectedItem)
+        if let code = recordedKeyCode {
+            newConfig.triggerKeyRawCode = code
+            // Also set triggerKey string for display/backward compat
+            switch code {
+            case KeyCode.rightCommand.rawValue: newConfig.triggerKey = "rightCommand"
+            case KeyCode.leftCommand.rawValue: newConfig.triggerKey = "leftCommand"
+            case KeyCode.capsLock.rawValue: newConfig.triggerKey = "capsLock"
+            case KeyCode.leftOption.rawValue: newConfig.triggerKey = "leftOption"
+            case KeyCode.rightOption.rawValue: newConfig.triggerKey = "rightOption"
+            default: newConfig.triggerKey = "keycode_\(code)"
+            }
+        }
 
         let src1 = source1PopUp.selectedItem?.representedObject as? String ?? TtakConstants.defaultInputSource1
         let src2 = source2PopUp.selectedItem?.representedObject as? String ?? TtakConstants.defaultInputSource2
@@ -243,6 +268,7 @@ final class PreferencesWindowController: NSWindowController {
     @objc private func resetPressed() {
         let defaults = Config()
         config = defaults
+        recordedKeyCode = defaults.resolvedKeyCode
         loadCurrentValues()
     }
 }

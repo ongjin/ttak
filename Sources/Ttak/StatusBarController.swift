@@ -55,7 +55,8 @@ class StatusBarController: NSObject {
         menu.addItem(NSMenuItem.separator())
 
         // Trigger key
-        let triggerItem = NSMenuItem(title: "Trigger: \(config.triggerKey)", action: nil, keyEquivalent: "")
+        let triggerName = Config.keyName(forKeyCode: config.resolvedKeyCode)
+        let triggerItem = NSMenuItem(title: "Trigger: \(triggerName)", action: nil, keyEquivalent: "")
         triggerItem.isEnabled = false
         menu.addItem(triggerItem)
 

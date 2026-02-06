@@ -2,6 +2,7 @@ import Foundation
 
 struct Config: Codable {
     var triggerKey: String
+    var triggerKeyRawCode: UInt16?
     var inputSources: [String]
     var holdThreshold: Int
     var debounceInterval: Int
@@ -9,6 +10,7 @@ struct Config: Codable {
 
     init() {
         self.triggerKey = "rightCommand"
+        self.triggerKeyRawCode = nil
         self.inputSources = [
             TtakConstants.defaultInputSource1,
             TtakConstants.defaultInputSource2
@@ -18,14 +20,23 @@ struct Config: Codable {
         self.verbose = false
     }
 
-    var triggerKeyCode: KeyCode {
+    /// Returns the raw keycode to use for the trigger.
+    /// Prefers triggerKeyRawCode if set, otherwise maps from triggerKey string.
+    var resolvedKeyCode: UInt16 {
+        if let raw = triggerKeyRawCode { return raw }
         switch triggerKey {
-        case "leftCommand": return .leftCommand
-        case "capsLock": return .capsLock
-        case "leftOption": return .leftOption
-        case "rightOption": return .rightOption
-        default: return .rightCommand
+        case "leftCommand": return KeyCode.leftCommand.rawValue
+        case "capsLock": return KeyCode.capsLock.rawValue
+        case "leftOption": return KeyCode.leftOption.rawValue
+        case "rightOption": return KeyCode.rightOption.rawValue
+        default: return KeyCode.rightCommand.rawValue
         }
+    }
+
+    /// Whether the trigger key is Caps Lock (needs special event suppression).
+    var isCapsLock: Bool {
+        if let raw = triggerKeyRawCode { return raw == KeyCode.capsLock.rawValue }
+        return triggerKey == "capsLock"
     }
 
     func save(to path: String) {
@@ -65,6 +76,45 @@ struct Config: Codable {
         } catch {
             fputs("Warning: Could not parse config file, using defaults\n", stderr)
             return Config()
+        }
+    }
+
+    /// Human-readable name for the trigger key
+    static func keyName(forKeyCode code: UInt16) -> String {
+        switch code {
+        case KeyCode.rightCommand.rawValue: return "Right Command"
+        case KeyCode.leftCommand.rawValue: return "Left Command"
+        case KeyCode.capsLock.rawValue: return "Caps Lock"
+        case KeyCode.leftOption.rawValue: return "Left Option"
+        case KeyCode.rightOption.rawValue: return "Right Option"
+        case 56: return "Left Shift"
+        case 60: return "Right Shift"
+        case 58: return "Left Option"
+        case 61: return "Right Option"
+        case 59: return "Left Control"
+        case 62: return "Right Control"
+        case 63: return "Function (fn)"
+        case 122: return "F1"
+        case 120: return "F2"
+        case 99: return "F3"
+        case 118: return "F4"
+        case 96: return "F5"
+        case 97: return "F6"
+        case 98: return "F7"
+        case 100: return "F8"
+        case 101: return "F9"
+        case 109: return "F10"
+        case 103: return "F11"
+        case 111: return "F12"
+        case 105: return "F13"
+        case 107: return "F14"
+        case 113: return "F15"
+        case 106: return "F16"
+        case 64: return "F17"
+        case 79: return "F18"
+        case 80: return "F19"
+        case 90: return "F20"
+        default: return "Key \(code)"
         }
     }
 }

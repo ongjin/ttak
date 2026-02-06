@@ -91,8 +91,17 @@ final class InputSourceManager {
 
         let status = TISSelectInputSource(target)
         if status == noErr {
-            if verbose {
-                fputs("Toggle (TIS): \(currentID) -> \(targetID)\n", stderr)
+            // TISSelectInputSource may return noErr without actually switching.
+            // Verify after a short delay; fall back to Fn+Space if it didn't work.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.015) { [self] in
+                if currentInputSourceID() != targetID {
+                    if verbose {
+                        fputs("TIS returned noErr but didn't switch, using fallback\n", stderr)
+                    }
+                    simulateInputSourceToggle()
+                } else if verbose {
+                    fputs("Toggle (TIS): \(currentID) -> \(targetID)\n", stderr)
+                }
             }
         } else {
             if verbose {

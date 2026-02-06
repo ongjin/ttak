@@ -11,27 +11,34 @@ final class KeyInterceptor {
 
     // Configuration
     private var triggerKeyCode: UInt16 = KeyCode.rightCommand.rawValue
-    private var holdThresholdTicks: UInt64 = 300_000_000  // Will be converted from ms to ticks
-    private var debounceIntervalTicks: UInt64 = 100_000_000  // Will be converted from ms to ticks
+    private var triggerIsModifier: Bool = true
+    private var holdThresholdTicks: UInt64 = 300_000_000
+    private var debounceIntervalTicks: UInt64 = 100_000_000
     private var isCapsLockMode: Bool = false
     private var verbose: Bool = false
     private var timebase = mach_timebase_info_data_t()
 
     // State machine
-    private var modifierIsDown = false
-    private var modifierDownTime: UInt64 = 0
+    private var triggerIsDown = false
+    private var triggerDownTime: UInt64 = 0
     private var otherKeyPressed = false
     private var lastToggleTime: UInt64 = 0
+
+    // Recording mode: captures the next key press (modifier or regular)
+    var isRecording = false
+    var onKeyRecorded: ((UInt16) -> Void)?
+
+    private static let modifierKeycodes: Set<UInt16> = [54, 55, 56, 57, 58, 59, 60, 61, 62, 63]
 
     private init() {}
 
     func setup(config: Config, inputSourceManager: InputSourceManager) -> Bool {
         self.inputSourceManager = inputSourceManager
-        self.triggerKeyCode = config.triggerKeyCode.rawValue
-        self.isCapsLockMode = (config.triggerKey == "capsLock")
+        self.triggerKeyCode = config.resolvedKeyCode
+        self.triggerIsModifier = Self.modifierKeycodes.contains(config.resolvedKeyCode)
+        self.isCapsLockMode = config.isCapsLock
         self.verbose = config.verbose
 
-        // Get timebase for proper tick-to-nanosecond conversion
         mach_timebase_info(&timebase)
 
         let holdNs = UInt64(config.holdThreshold) * 1_000_000
@@ -39,8 +46,10 @@ final class KeyInterceptor {
         holdThresholdTicks = holdNs &* UInt64(timebase.denom) / UInt64(timebase.numer)
         debounceIntervalTicks = debounceNs &* UInt64(timebase.denom) / UInt64(timebase.numer)
 
+        // Capture flagsChanged, keyDown, and keyUp
         let eventMask: CGEventMask = (1 << CGEventType.flagsChanged.rawValue)
                                    | (1 << CGEventType.keyDown.rawValue)
+                                   | (1 << CGEventType.keyUp.rawValue)
 
         guard let tap = CGEvent.tapCreate(
             tap: .cgSessionEventTap,
@@ -65,9 +74,6 @@ final class KeyInterceptor {
         CFRunLoopAddSource(CFRunLoopGetCurrent(), source, .commonModes)
         CGEvent.tapEnable(tap: tap, enable: true)
 
-        if verbose {
-            fputs("Event tap installed. Trigger key: \(config.triggerKey) (keycode \(triggerKeyCode))\n", stderr)
-        }
         return true
     }
 
@@ -83,87 +89,117 @@ final class KeyInterceptor {
     }
 
     fileprivate func handleEvent(proxy: CGEventTapProxy, type: CGEventType, event: CGEvent) -> Unmanaged<CGEvent>? {
+        let keycode = UInt16(event.getIntegerValueField(.keyboardEventKeycode))
+
         // Handle tap disabled — re-enable
         if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
             if let tap = eventTap {
                 CGEvent.tapEnable(tap: tap, enable: true)
-                if verbose {
-                    fputs("WARNING: Event tap was disabled, re-enabling\n", stderr)
+            }
+            return Unmanaged.passUnretained(event)
+        }
+
+        // Recording mode: capture any key press
+        if isRecording {
+            if type == .flagsChanged && Self.modifierKeycodes.contains(keycode) && event.flags.rawValue > 256 {
+                isRecording = false
+                DispatchQueue.main.async { [self] in
+                    onKeyRecorded?(keycode)
+                    onKeyRecorded = nil
                 }
-            }
-            return Unmanaged.passUnretained(event)
-        }
-
-        // Track other key presses during modifier hold
-        if type == .keyDown {
-            if modifierIsDown {
-                otherKeyPressed = true
-            }
-            return Unmanaged.passUnretained(event)
-        }
-
-        // Handle flagsChanged (modifier key events)
-        guard type == .flagsChanged else {
-            return Unmanaged.passUnretained(event)
-        }
-
-        let keycode = UInt16(event.getIntegerValueField(.keyboardEventKeycode))
-
-        // Only process our trigger key
-        guard keycode == triggerKeyCode else {
-            // Another modifier pressed during our trigger hold
-            if modifierIsDown {
-                otherKeyPressed = true
-            }
-            return Unmanaged.passUnretained(event)
-        }
-
-        let now = mach_absolute_time()
-
-        // Detect key down vs key up based on flags
-        let isKeyDown = isModifierDown(event: event)
-
-        if isKeyDown {
-            // Modifier key pressed down
-            modifierIsDown = true
-            modifierDownTime = now
-            otherKeyPressed = false
-
-            if verbose {
-                fputs("Trigger key down (keycode \(keycode))\n", stderr)
-            }
-
-            // For Caps Lock mode, suppress the event to prevent LED toggle
-            if isCapsLockMode {
                 return nil
             }
-        } else {
-            // Modifier key released
-            if modifierIsDown {
-                modifierIsDown = false
-                let elapsed = now - modifierDownTime
-
-                if verbose {
-                    fputs("Trigger key up: otherKeyPressed=\(otherKeyPressed), elapsed=\(ticksToMs(elapsed))ms\n", stderr)
+            if type == .keyDown {
+                isRecording = false
+                DispatchQueue.main.async { [self] in
+                    onKeyRecorded?(keycode)
+                    onKeyRecorded = nil
                 }
+                return nil
+            }
+            return Unmanaged.passUnretained(event)
+        }
 
-                // Check conditions for toggle:
-                // 1. No other key was pressed during hold
-                // 2. Hold duration is within threshold (tap, not hold)
-                // 3. Debounce: enough time since last toggle
-                if !otherKeyPressed
-                    && elapsed < holdThresholdTicks
-                    && (now - lastToggleTime) > debounceIntervalTicks
-                {
-                    lastToggleTime = now
-                    inputSourceManager?.toggle()
+        // === Modifier-key trigger path (flagsChanged) ===
+        if triggerIsModifier {
+            if type == .keyDown || type == .keyUp {
+                // Track other key presses during trigger hold
+                if triggerIsDown && type == .keyDown {
+                    otherKeyPressed = true
                 }
+                return Unmanaged.passUnretained(event)
+            }
 
-                // For Caps Lock mode, suppress the release event too
-                if isCapsLockMode {
-                    return nil
+            guard type == .flagsChanged else {
+                return Unmanaged.passUnretained(event)
+            }
+
+            guard keycode == triggerKeyCode else {
+                if triggerIsDown { otherKeyPressed = true }
+                return Unmanaged.passUnretained(event)
+            }
+
+            let now = mach_absolute_time()
+            let isDown = isModifierDown(event: event)
+
+            if isDown {
+                triggerIsDown = true
+                triggerDownTime = now
+                otherKeyPressed = false
+                if isCapsLockMode { return nil }
+            } else {
+                if triggerIsDown {
+                    triggerIsDown = false
+                    let elapsed = now - triggerDownTime
+                    if !otherKeyPressed
+                        && elapsed < holdThresholdTicks
+                        && (now - lastToggleTime) > debounceIntervalTicks
+                    {
+                        lastToggleTime = now
+                        inputSourceManager?.toggle()
+                    }
+                    if isCapsLockMode { return nil }
                 }
             }
+            return Unmanaged.passUnretained(event)
+        }
+
+        // === Regular-key trigger path (keyDown/keyUp) ===
+        if type == .flagsChanged {
+            // Modifier changes during trigger hold count as "other key"
+            if triggerIsDown { otherKeyPressed = true }
+            return Unmanaged.passUnretained(event)
+        }
+
+        if type == .keyDown {
+            if keycode == triggerKeyCode {
+                if !triggerIsDown {
+                    triggerIsDown = true
+                    triggerDownTime = mach_absolute_time()
+                    otherKeyPressed = false
+                }
+                return nil // suppress the trigger key
+            }
+            // Other key pressed during trigger hold
+            if triggerIsDown { otherKeyPressed = true }
+            return Unmanaged.passUnretained(event)
+        }
+
+        if type == .keyUp {
+            if keycode == triggerKeyCode {
+                if triggerIsDown {
+                    triggerIsDown = false
+                    let now = mach_absolute_time()
+                    // For regular keys (F18 etc.), always toggle on release
+                    // No otherKeyPressed or holdThreshold check needed
+                    if (now - lastToggleTime) > debounceIntervalTicks {
+                        lastToggleTime = now
+                        inputSourceManager?.toggle()
+                    }
+                }
+                return nil // suppress the trigger key
+            }
+            return Unmanaged.passUnretained(event)
         }
 
         return Unmanaged.passUnretained(event)
@@ -172,20 +208,18 @@ final class KeyInterceptor {
     private func isModifierDown(event: CGEvent) -> Bool {
         let flags = event.flags
 
-        switch KeyCode(rawValue: triggerKeyCode) {
-        case .rightCommand, .leftCommand:
-            return flags.contains(.maskCommand)
-        case .capsLock:
-            return flags.contains(.maskAlphaShift)
-        case .rightOption, .leftOption:
-            return flags.contains(.maskAlternate)
-        case .none:
-            return false
+        switch triggerKeyCode {
+        case 54, 55: return flags.contains(.maskCommand)
+        case 57: return flags.contains(.maskAlphaShift)
+        case 58, 61: return flags.contains(.maskAlternate)
+        case 56, 60: return flags.contains(.maskShift)
+        case 59, 62: return flags.contains(.maskControl)
+        case 63: return flags.contains(.maskSecondaryFn)
+        default: return false
         }
     }
 
     private func ticksToMs(_ ticks: UInt64) -> String {
-        // Use Double to prevent overflow on long uptimes
         let nanos = Double(ticks) * Double(timebase.numer) / Double(timebase.denom)
         let ms = nanos / 1_000_000.0
         return String(format: "%.1f", ms)
