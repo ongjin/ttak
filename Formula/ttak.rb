@@ -10,6 +10,7 @@ class Ttak < Formula
   def install
     system "swift", "build",
            "-c", "release",
+           "--disable-sandbox",
            "-Xswiftc", "-suppress-warnings"
     bin.install ".build/release/ttak"
   end
