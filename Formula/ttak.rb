@@ -1,10 +1,8 @@
 class Ttak < Formula
   desc "Zero-delay Korean/English input source switcher for macOS"
-  homepage "https://github.com/user/ttak"
-
-  # Replace "user" with your GitHub username and update the sha256
-  url "https://github.com/user/ttak/archive/refs/tags/v1.0.0.tar.gz"
-  sha256 "REPLACE_WITH_SHA256" # Run: shasum -a 256 v1.0.0.tar.gz
+  homepage "https://github.com/ongjin/ttak"
+  url "https://github.com/ongjin/ttak/archive/refs/tags/v1.0.0.tar.gz"
+  sha256 "REPLACE_WITH_SHA256"
   license "MIT"
 
   depends_on :macos => :ventura

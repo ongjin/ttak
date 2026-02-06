@@ -26,7 +26,7 @@ If the Carbon API fails (a known macOS bug with CJKV input sources), Ttak automa
 ### Homebrew
 
 ```bash
-brew tap user/ttak
+brew tap ongjin/ttak
 brew install ttak
 ```
 
@@ -39,7 +39,7 @@ brew services start ttak
 ### Build from Source
 
 ```bash
-git clone https://github.com/user/ttak.git
+git clone https://github.com/ongjin/ttak.git
 cd ttak
 swift build -c release
 sudo cp .build/release/ttak /usr/local/bin/
