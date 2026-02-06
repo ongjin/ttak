@@ -1,6 +1,6 @@
 cask "ttak" do
-  version "2.1.0"
-  sha256 "e2461ce6f10a12828cafabae8728390a4d2aa1d486f6f864dc7a3124fc991515"
+  version "2.2.0"
+  sha256 "d40689d76ff5a89c191d2be8518002f7f1cc54a79dcc3b73678c7270534174ff"
 
   url "https://github.com/ongjin/ttak/releases/download/v#{version}/Ttak.app.zip"
   name "Ttak"
